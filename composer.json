@@ -1,0 +1,46 @@
+{
+    "name": "tbachert/otel-instrumentation-amphp-http-client",
+    "description": "OpenTelemetry amphp/http-client instrumentation",
+    "keywords": ["opentelemetry", "otel", "instrumentation"],
+    "license": "Apache-2.0",
+    "require": {
+        "php": "^8.1",
+        "composer-runtime-api": "^2.0",
+        "amphp/http-client": "^5.0",
+        "open-telemetry/api": "^1.0",
+        "open-telemetry/context": "^1.1"
+    },
+    "require-dev": {
+        "amphp/http-server": "^3.3",
+        "amphp/phpunit-util": "^3.0",
+        "phpunit/phpunit": "^9.6",
+        "tbachert/otel-sdk": "^0.1"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "tbachert/spi": true
+        },
+        "preferred-install": {
+            "amphp/http-client": "source"
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Nevay\\OTelInstrumentation\\AmphpHttpClient\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Nevay\\OTelInstrumentation\\AmphpHttpClient\\": "tests/",
+            "Amp\\Http\\Client\\": "vendor/amphp/http-client/test/"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.1.x-dev"
+        }
+    }
+}
