@@ -33,7 +33,8 @@ use function strtolower;
 /**
  * Traces HTTP client requests.
  *
- * Spans end after the HTTP response headers are fully read. They do not include reading the response body.
+ * Spans start before the first request byte is sent and end after the HTTP response headers are fully read. They do not
+ * include reading the response body.
  *
  * The client span and context will be available as attributes on processed requests:
  * ```
@@ -77,49 +78,20 @@ final class TracingEventListener implements EventListener {
     }
 
     public function requestStart(Request $request): void {
-        $method = $request->getMethod();
-        if (!in_array($method, $this->knownHttpMethods, true)) {
-            $method = null;
-        }
-
-        $spanBuilder = $this->tracer
-            ->spanBuilder($method ?? 'HTTP')
-            ->setSpanKind(SpanKind::KIND_CLIENT)
-            ->setAttribute('http.request.method', $method ?? '_OTHER')
-            ->setAttribute('server.address', $request->getUri()->getHost())
-            ->setAttribute('server.port', $request->getUri()->getPort())
-            ->setAttribute('url.full', $request->getUri()->withUserInfo('')->__toString())
-        ;
-
         if (!$request->hasAttribute(RequestSharedState::class)) {
             $request->setAttribute(RequestSharedState::class, new RequestSharedState());
         }
 
-        $sharedState = $request->getAttribute(RequestSharedState::class);
-        assert($sharedState instanceof RequestSharedState);
-        if (++$sharedState->resendCount) {
-            $spanBuilder->setAttribute('http.request.resend_count', $sharedState->resendCount);
+        if ($request->hasAttribute(SpanInterface::class)) {
+            $request->removeAttribute(SpanInterface::class);
         }
-
-        if ($method === null) {
-            $spanBuilder->setAttribute('http.request.method_original', $request->getMethod());
-        }
-        if ($this->captureUrlSchemeAttribute) {
-            $spanBuilder->setAttribute('url.scheme', $request->getUri()->getScheme());
-        }
-
-        $span = $spanBuilder->startSpan();
-        $context = $span->storeInContext(Context::getCurrent());
-        foreach ($this->propagator->fields() as $field) {
-            $request->removeHeader($field);
-        }
-        $this->propagator->inject($request, new HttpMessagePropagationSetter(), $context);
-
-        $request->setAttribute(SpanInterface::class, $span);
-        $request->setAttribute(ContextInterface::class, $context);
     }
 
     public function requestFailed(Request $request, Throwable $exception): void {
+        if (!$request->hasAttribute(SpanInterface::class)) {
+            return;
+        }
+
         $span = $request->getAttribute(SpanInterface::class);
         assert($span instanceof SpanInterface);
 
@@ -154,28 +126,7 @@ final class TracingEventListener implements EventListener {
     }
 
     public function connectionAcquired(Request $request, Connection $connection, int $streamCount): void {
-        $span = $request->getAttribute(SpanInterface::class);
-        assert($span instanceof SpanInterface);
-
-        $localAddress = $connection->getLocalAddress();
-        if ($localAddress instanceof InternetAddress) {
-            $span->setAttribute('network.local.address', $localAddress->getAddress());
-            $span->setAttribute('network.local.port', $localAddress->getPort());
-        }
-        if ($localAddress instanceof UnixAddress) {
-            $span->setAttribute('network.local.address', $localAddress->toString());
-        }
-
-        $remoteAddress = $connection->getRemoteAddress();
-        if ($remoteAddress instanceof InternetAddress) {
-            $span->setAttribute('network.peer.address', $remoteAddress->getAddress());
-            $span->setAttribute('network.peer.port', $remoteAddress->getPort());
-            $span->setAttribute('network.type', strtolower($remoteAddress->getVersion()->name));
-        }
-        if ($remoteAddress instanceof UnixAddress) {
-            $span->setAttribute('network.transport', 'unix');
-            $span->setAttribute('network.peer.address', $remoteAddress->toString());
-        }
+        // no-op
     }
 
     public function push(Request $request): void {
@@ -183,17 +134,70 @@ final class TracingEventListener implements EventListener {
     }
 
     public function requestHeaderStart(Request $request, Stream $stream): void {
-        $span = $request->getAttribute(SpanInterface::class);
-        assert($span instanceof Span);
+        $method = $request->getMethod();
+        if (!in_array($method, $this->knownHttpMethods, true)) {
+            $method = null;
+        }
 
+        $spanBuilder = $this->tracer
+            ->spanBuilder($method ?? 'HTTP')
+            ->setSpanKind(SpanKind::KIND_CLIENT)
+            ->setAttribute('http.request.method', $method ?? '_OTHER')
+            ->setAttribute('server.address', $request->getUri()->getHost())
+            ->setAttribute('server.port', $request->getUri()->getPort())
+            ->setAttribute('url.full', $request->getUri()->withUserInfo('')->__toString())
+        ;
+
+        $sharedState = $request->getAttribute(RequestSharedState::class);
+        assert($sharedState instanceof RequestSharedState);
+        if (++$sharedState->resendCount) {
+            $spanBuilder->setAttribute('http.request.resend_count', $sharedState->resendCount);
+        }
+
+        if ($method === null) {
+            $spanBuilder->setAttribute('http.request.method_original', $request->getMethod());
+        }
+        if ($this->captureUrlSchemeAttribute) {
+            $spanBuilder->setAttribute('url.scheme', $request->getUri()->getScheme());
+        }
         if ($this->captureUserAgentAttribute) {
-            $span->setAttribute('user_agent.original', $request->getHeader('user-agent'));
+            $spanBuilder->setAttribute('user_agent.original', $request->getHeader('user-agent'));
         }
         foreach ($this->captureRequestHeaders as $header => $attribute) {
             if ($value = $request->getHeaderArray($header)) {
-                $span->setAttribute($attribute, $value);
+                $spanBuilder->setAttribute($attribute, $value);
             }
         }
+
+        $localAddress = $stream->getLocalAddress();
+        if ($localAddress instanceof InternetAddress) {
+            $spanBuilder->setAttribute('network.local.address', $localAddress->getAddress());
+            $spanBuilder->setAttribute('network.local.port', $localAddress->getPort());
+        }
+        if ($localAddress instanceof UnixAddress) {
+            $spanBuilder->setAttribute('network.local.address', $localAddress->toString());
+        }
+
+        $remoteAddress = $stream->getRemoteAddress();
+        if ($remoteAddress instanceof InternetAddress) {
+            $spanBuilder->setAttribute('network.peer.address', $remoteAddress->getAddress());
+            $spanBuilder->setAttribute('network.peer.port', $remoteAddress->getPort());
+            $spanBuilder->setAttribute('network.type', strtolower($remoteAddress->getVersion()->name));
+        }
+        if ($remoteAddress instanceof UnixAddress) {
+            $spanBuilder->setAttribute('network.peer.address', $remoteAddress->toString());
+            $spanBuilder->setAttribute('network.transport', 'unix');
+        }
+
+        $span = $spanBuilder->startSpan();
+        $context = $span->storeInContext(Context::getCurrent());
+        foreach ($this->propagator->fields() as $field) {
+            $request->removeHeader($field);
+        }
+        $this->propagator->inject($request, new HttpMessagePropagationSetter(), $context);
+
+        $request->setAttribute(SpanInterface::class, $span);
+        $request->setAttribute(ContextInterface::class, $context);
     }
 
     public function requestHeaderEnd(Request $request, Stream $stream): void {

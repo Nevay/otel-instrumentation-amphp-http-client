@@ -6,6 +6,7 @@ use Amp\Http\Client\Connection\DefaultConnectionFactory;
 use Amp\Http\Client\Connection\UnlimitedConnectionPool;
 use Amp\Http\Client\HttpClientBuilder;
 use Amp\Http\Client\Interceptor\InterceptorTest;
+use Amp\Http\Client\Interceptor\ResolveBaseUri;
 use Amp\Http\Client\Request;
 use Amp\Http\HttpStatus;
 use Amp\Http\Server\DefaultErrorHandler;
@@ -125,6 +126,25 @@ final class TracingEventListenerTest extends InterceptorTest {
         $this->assertSame('HTTP', $span->getName());
         $this->assertSame('_OTHER', $span->getAttributes()->get('http.request.method'));
         $this->assertSame('CUSTOM', $span->getAttributes()->get('http.request.method_original'));
+    }
+
+    public function testResolveBaseUri(): void {
+        $tracerProvider = (new TracerProviderBuilder())
+            ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
+            ->build();
+        $listener = new TracingEventListener($tracerProvider, new MultiTextMapPropagator([new TraceContextPropagator(), new BaggagePropagator()]));
+
+        $this->givenEventListener($listener);
+        $this->givenApplicationInterceptor(new ResolveBaseUri('http://example.com'));
+        $this->whenRequestIsExecuted(new Request('/foo/bar?test=1'));
+
+        $tracerProvider->shutdown();
+        $spans = $exporter->collect();
+        $this->assertCount(1, $spans);
+
+        $span = $spans[0];
+
+        $this->assertSame('http://example.com/foo/bar?test=1', $span->getAttributes()->get('url.full'));
     }
 
     public function testRedirectResendCount(): void {
