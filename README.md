@@ -10,10 +10,12 @@ composer require tbachert/otel-instrumentation-amphp-http-client
 
 ```php
 use Amp\Http\Client\HttpClientBuilder;
+use Nevay\OTelInstrumentation\AmphpHttpClient\MetricsEventListener;
 use Nevay\OTelInstrumentation\AmphpHttpClient\TracingEventListener;
 
 $httpClient = (new HttpClientBuilder)
     ->listen(new TracingEventListener($tracerProvider, $propagator))
+    ->listen(new MetricsEventListener($meterProvider))
     ->build();
 
 $response = $httpClient->request(...);
