@@ -128,6 +128,43 @@ final class TracingEventListenerTest extends InterceptorTest {
         $this->assertSame('CUSTOM', $span->getAttributes()->get('http.request.method_original'));
     }
 
+    public function testRedactUserPassword(): void {
+        $tracerProvider = (new TracerProviderBuilder())
+            ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
+            ->build();
+        $listener = new TracingEventListener($tracerProvider, new MultiTextMapPropagator([new TraceContextPropagator(), new BaggagePropagator()]));
+
+        (fn() => $this->builder = $this->builder->allowDeprecatedUriUserInfo())->bindTo($this, InterceptorTest::class)();
+        $this->givenEventListener($listener);
+        $this->whenRequestIsExecuted(new Request('http://user:pass@example.com'));
+
+        $tracerProvider->shutdown();
+        $spans = $exporter->collect();
+        $this->assertCount(1, $spans);
+
+        $span = $spans[0];
+
+        $this->assertSame('http://REDACTED:REDACTED@example.com', $span->getAttributes()->get('url.full'));
+    }
+
+    public function testRedactSensitiveQueryParameter(): void {
+        $tracerProvider = (new TracerProviderBuilder())
+            ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
+            ->build();
+        $listener = new TracingEventListener($tracerProvider, new MultiTextMapPropagator([new TraceContextPropagator(), new BaggagePropagator()]));
+
+        $this->givenEventListener($listener);
+        $this->whenRequestIsExecuted(new Request('http://www.example.com/path?color=blue&sig=somesignature'));
+
+        $tracerProvider->shutdown();
+        $spans = $exporter->collect();
+        $this->assertCount(1, $spans);
+
+        $span = $spans[0];
+
+        $this->assertSame('http://www.example.com/path?color=blue&sig=REDACTED', $span->getAttributes()->get('url.full'));
+    }
+
     public function testResolveBaseUri(): void {
         $tracerProvider = (new TracerProviderBuilder())
             ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))

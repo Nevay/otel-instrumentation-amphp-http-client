@@ -14,6 +14,9 @@ use Amp\Socket\UnixAddress;
 use Composer\InstalledVersions;
 use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\HttpMessagePropagationSetter;
 use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\RequestSharedState;
+use Nevay\OTelInstrumentation\AmphpHttpClient\UrlSanitizer\CompositeSanitizer;
+use Nevay\OTelInstrumentation\AmphpHttpClient\UrlSanitizer\RedactSensitiveQueryStringValuesSanitizer;
+use Nevay\OTelInstrumentation\AmphpHttpClient\UrlSanitizer\RedactUsernamePasswordSanitizer;
 use OpenTelemetry\API\Trace\Span;
 use OpenTelemetry\API\Trace\SpanInterface;
 use OpenTelemetry\API\Trace\SpanKind;
@@ -72,6 +75,10 @@ final class TracingEventListener implements EventListener {
         private readonly bool $captureRequestBodySize = false,
         private readonly bool $captureResponseBodySize = false,
         private readonly array $knownHttpMethods = ['CONNECT', 'DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT', 'TRACE'],
+        private readonly UrlSanitizer $sanitizer = new CompositeSanitizer([
+            new RedactUsernamePasswordSanitizer(),
+            new RedactSensitiveQueryStringValuesSanitizer(['AWSAccessKeyId', 'Signature', 'sig', 'X-Goog-Signature']),
+        ]),
     ) {
         $this->tracer = $tracerProvider->getTracer(
             'com.tobiasbachert.instrumentation.amphp-http-client',
@@ -156,7 +163,7 @@ final class TracingEventListener implements EventListener {
                 'http' => 80,
                 default => null,
             })
-            ->setAttribute('url.full', $request->getUri()->withUserInfo('')->__toString())
+            ->setAttribute('url.full', $this->sanitizer->sanitize($request->getUri())->__toString())
         ;
 
         $sharedState = $request->getAttribute(RequestSharedState::class);
