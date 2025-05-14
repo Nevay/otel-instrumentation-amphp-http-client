@@ -17,7 +17,6 @@ use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\RequestSharedState;
 use Nevay\OTelInstrumentation\AmphpHttpClient\UrlSanitizer\CompositeSanitizer;
 use Nevay\OTelInstrumentation\AmphpHttpClient\UrlSanitizer\RedactSensitiveQueryStringValuesSanitizer;
 use Nevay\OTelInstrumentation\AmphpHttpClient\UrlSanitizer\RedactUsernamePasswordSanitizer;
-use OpenTelemetry\API\Trace\Span;
 use OpenTelemetry\API\Trace\SpanInterface;
 use OpenTelemetry\API\Trace\SpanKind;
 use OpenTelemetry\API\Trace\StatusCode;
@@ -240,7 +239,7 @@ final class TracingEventListener implements EventListener {
 
     public function responseHeaderEnd(Request $request, Stream $stream, Response $response): void {
         $span = $request->getAttribute(SpanInterface::class);
-        assert($span instanceof Span);
+        assert($span instanceof SpanInterface);
 
         $span->setAttribute('network.protocol.version', $response->getProtocolVersion());
         $span->setAttribute('http.response.status_code', $response->getStatus());
