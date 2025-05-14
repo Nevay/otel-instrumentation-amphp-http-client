@@ -74,7 +74,11 @@ final class MetricsEventListener implements EventListener {
         $attributes = [
             'http.request.method' => $method ?? '_OTHER',
             'server.address' => $request->getUri()->getHost(),
-            'server.port' => $request->getUri()->getPort(),
+            'server.port' => $request->getUri()->getPort() ?? match ($request->getUri()->getScheme()) {
+                'https' => 443,
+                'http' => 80,
+                default => null,
+            },
         ];
 
         if ($this->captureUrlSchemeAttribute) {

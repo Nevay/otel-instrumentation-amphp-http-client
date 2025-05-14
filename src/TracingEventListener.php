@@ -144,7 +144,11 @@ final class TracingEventListener implements EventListener {
             ->setSpanKind(SpanKind::KIND_CLIENT)
             ->setAttribute('http.request.method', $method ?? '_OTHER')
             ->setAttribute('server.address', $request->getUri()->getHost())
-            ->setAttribute('server.port', $request->getUri()->getPort())
+            ->setAttribute('server.port', $request->getUri()->getPort() ?? match ($request->getUri()->getScheme()) {
+                'https' => 443,
+                'http' => 80,
+                default => null,
+            })
             ->setAttribute('url.full', $request->getUri()->withUserInfo('')->__toString())
         ;
 
