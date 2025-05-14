@@ -76,7 +76,7 @@ final class TracingEventListener implements EventListener {
         $this->tracer = $tracerProvider->getTracer(
             'com.tobiasbachert.instrumentation.amphp-http-client',
             InstalledVersions::getPrettyVersion('tbachert/otel-instrumentation-amphp-http-client'),
-            'https://opentelemetry.io/schemas/1.30.0',
+            'https://opentelemetry.io/schemas/1.33.0',
         );
         $this->captureRequestHeaders = array_combine($captureRequestHeaders,
             array_map(static fn(string $header) => sprintf('http.request.header.%s', strtolower($header)), $captureRequestHeaders));
