@@ -9,6 +9,7 @@ use Amp\Http\Client\NetworkInterceptor;
 use Amp\Http\Client\Request;
 use Amp\Http\Client\Response;
 use Amp\Socket\InternetAddress;
+use Amp\Socket\SocketAddressType;
 use Amp\Socket\UnixAddress;
 use Composer\InstalledVersions;
 use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\HttpMessagePropagationSetter;
@@ -53,8 +54,11 @@ final class TracingEventListener implements EventListener {
     /**
      * @param list<string> $captureRequestHeaders list of request headers to capture
      * @param list<string> $captureResponseHeaders list of response headers to capture
-     * @param bool $captureUrlSchemeAttribute whether the `url.scheme` attribute should be captured
-     * @param bool $captureUserAgentAttribute whether the `user_agent.original` attribute should be captured
+     * @param bool $captureUrlScheme whether the `url.scheme` attribute should be captured
+     * @param bool $captureUserAgentOriginal whether the `user_agent.original` attribute should be captured
+     * @param bool $captureNetworkTransport whether the `network.transport` attribute should be captured
+     * @param bool $captureRequestBodySize whether the `http.request.body.size` attribute should be captured
+     * @param bool $captureResponseBodySize whether the `http.response.body.size` attribute should be captured
      * @param list<string> $knownHttpMethods case-sensitive list of known http methods
      */
     public function __construct(
@@ -62,8 +66,11 @@ final class TracingEventListener implements EventListener {
         private readonly TextMapPropagatorInterface $propagator,
         array $captureRequestHeaders = [],
         array $captureResponseHeaders = [],
-        private readonly bool $captureUrlSchemeAttribute = false,
-        private readonly bool $captureUserAgentAttribute = false,
+        private readonly bool $captureUrlScheme = false,
+        private readonly bool $captureUserAgentOriginal = false,
+        private readonly bool $captureNetworkTransport = false,
+        private readonly bool $captureRequestBodySize = false,
+        private readonly bool $captureResponseBodySize = false,
         private readonly array $knownHttpMethods = ['CONNECT', 'DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT', 'TRACE'],
     ) {
         $this->tracer = $tracerProvider->getTracer(
@@ -161,10 +168,10 @@ final class TracingEventListener implements EventListener {
         if ($method === null) {
             $spanBuilder->setAttribute('http.request.method_original', $request->getMethod());
         }
-        if ($this->captureUrlSchemeAttribute) {
+        if ($this->captureUrlScheme) {
             $spanBuilder->setAttribute('url.scheme', $request->getUri()->getScheme());
         }
-        if ($this->captureUserAgentAttribute) {
+        if ($this->captureUserAgentOriginal) {
             $spanBuilder->setAttribute('user_agent.original', $request->getHeader('user-agent'));
         }
         foreach ($this->captureRequestHeaders as $header => $attribute) {
@@ -172,14 +179,8 @@ final class TracingEventListener implements EventListener {
                 $spanBuilder->setAttribute($attribute, $value);
             }
         }
-
-        $localAddress = $stream->getLocalAddress();
-        if ($localAddress instanceof InternetAddress) {
-            $spanBuilder->setAttribute('network.local.address', $localAddress->getAddress());
-            $spanBuilder->setAttribute('network.local.port', $localAddress->getPort());
-        }
-        if ($localAddress instanceof UnixAddress) {
-            $spanBuilder->setAttribute('network.local.address', $localAddress->toString());
+        if ($this->captureRequestBodySize && $request->hasHeader('content-length')) {
+            $spanBuilder->setAttribute('http.request.body.size', +$request->getHeader('content-length'));
         }
 
         $remoteAddress = $stream->getRemoteAddress();
@@ -190,7 +191,13 @@ final class TracingEventListener implements EventListener {
         }
         if ($remoteAddress instanceof UnixAddress) {
             $spanBuilder->setAttribute('network.peer.address', $remoteAddress->toString());
-            $spanBuilder->setAttribute('network.transport', 'unix');
+        }
+        $spanBuilder->setAttribute('network.protocol.name', 'http');
+        if ($this->captureNetworkTransport) {
+            $spanBuilder->setAttribute('network.transport', match ($remoteAddress->getType()) {
+                SocketAddressType::Internet => 'tcp',
+                SocketAddressType::Unix => 'unix',
+            });
         }
 
         $span = $spanBuilder->startSpan();
@@ -239,6 +246,9 @@ final class TracingEventListener implements EventListener {
             if ($value = $response->getHeaderArray($header)) {
                 $span->setAttribute($attribute, $value);
             }
+        }
+        if ($this->captureResponseBodySize && $response->hasHeader('content-length')) {
+            $span->setAttribute('http.response.body.size', +$response->getHeader('content-length'));
         }
 
         $span->end();
