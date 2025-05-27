@@ -45,6 +45,12 @@
         "spi": {
             "OpenTelemetry\\API\\Instrumentation\\AutoInstrumentation\\Instrumentation": [
                 "Nevay\\OTelInstrumentation\\AmphpHttpClient\\AmphpHttpClientInstrumentation"
+            ],
+            "Nevay\\OTelSDK\\Configuration\\ComponentProvider": [
+                "Nevay\\OTelInstrumentation\\AmphpHttpClient\\Config\\InstrumentationConfigurationHttp",
+                "Nevay\\OTelInstrumentation\\AmphpHttpClient\\Config\\UrlSanitizerDefault",
+                "Nevay\\OTelInstrumentation\\AmphpHttpClient\\Config\\UrlSanitizerRedactQueryStringValues",
+                "Nevay\\OTelInstrumentation\\AmphpHttpClient\\Config\\UrlSanitizerRedactUserInfo"
             ]
         }
     }

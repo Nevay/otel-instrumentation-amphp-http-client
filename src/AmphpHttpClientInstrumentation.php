@@ -12,15 +12,24 @@ final class AmphpHttpClientInstrumentation implements Instrumentation {
 
     public function register(HookManagerInterface $hookManager, ConfigProperties $configuration, Context $context): void {
         $config = $configuration->get(HttpConfig::class)?->config;
+        $phpConfig = $configuration->get(Config\HttpConfig::class) ?? new Config\HttpConfig();
 
         $tracing = new TracingEventListener(
             tracerProvider: $context->tracerProvider,
             propagator: $context->propagator,
             captureRequestHeaders: $config['client']['request_captured_headers'] ?? [],
             captureResponseHeaders: $config['client']['response_captured_headers'] ?? [],
+            captureUrlScheme: $phpConfig->captureUrlScheme,
+            captureUserAgentOriginal: $phpConfig->captureUserAgentOriginal,
+            captureRequestBodySize: $phpConfig->captureRequestBodySize,
+            captureResponseBodySize: $phpConfig->captureResponseBodySize,
+            knownHttpMethods: $phpConfig->knownHttpMethods,
+            sanitizer: $phpConfig->sanitizer,
         );
         $metrics = new MetricsEventListener(
             meterProvider: $context->meterProvider,
+            captureUrlScheme: $phpConfig->captureUrlScheme,
+            knownHttpMethods: $phpConfig->knownHttpMethods,
         );
 
         $hookManager->hook(
