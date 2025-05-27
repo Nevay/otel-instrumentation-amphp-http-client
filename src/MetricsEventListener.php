@@ -27,12 +27,12 @@ final class MetricsEventListener implements EventListener {
     private readonly HistogramInterface $connectionDuration;
 
     /**
-     * @param bool $captureUrlSchemeAttribute whether the `url.scheme` attribute should be captured
+     * @param bool $captureUrlScheme whether the `url.scheme` attribute should be captured
      * @param list<string> $knownHttpMethods case-sensitive list of known http methods
      */
     public function __construct(
         MeterProviderInterface $meterProvider,
-        private readonly bool $captureUrlSchemeAttribute = false,
+        private readonly bool $captureUrlScheme = false,
         private readonly array $knownHttpMethods = ['CONNECT', 'DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT', 'TRACE'],
     ) {
         $meter = $meterProvider->getMeter(
@@ -81,7 +81,7 @@ final class MetricsEventListener implements EventListener {
             },
         ];
 
-        if ($this->captureUrlSchemeAttribute) {
+        if ($this->captureUrlScheme) {
             $attributes['url.scheme'] = $request->getUri()->getScheme();
         }
 
