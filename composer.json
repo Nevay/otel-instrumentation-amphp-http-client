@@ -39,6 +39,10 @@
             "Amp\\Http\\Client\\": "vendor/amphp/http-client/test/"
         }
     },
+    "repositories": [{
+        "type": "vcs",
+        "url": "git@github.com:Nevay/otel-instrumentation-config-http.git"
+    }],
     "extra": {
         "branch-alias": {
             "dev-main": "0.1.x-dev"
