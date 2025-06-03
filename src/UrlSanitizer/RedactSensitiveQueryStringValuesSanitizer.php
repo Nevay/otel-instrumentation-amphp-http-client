@@ -5,8 +5,8 @@ use Nevay\OTelInstrumentation\AmphpHttpClient\UrlSanitizer;
 use Psr\Http\Message\UriInterface;
 use function strlen;
 use function strpos;
+use function substr;
 use function substr_compare;
-use function substr_replace;
 
 final class RedactSensitiveQueryStringValuesSanitizer implements UrlSanitizer {
 
@@ -19,22 +19,30 @@ final class RedactSensitiveQueryStringValuesSanitizer implements UrlSanitizer {
 
     public function sanitize(UriInterface $url): UriInterface {
         $query = $url->getQuery();
-        for ($i = 0; $i < strlen($query); $i = $d + 1) {
+        $offset = 0;
+        $sanitized = '';
+        for ($i = 0, $n = strlen($query); $i < $n; $i = $d + 1) {
             if (($d = strpos($query, '&', $i)) === false) {
                 $d = strlen($query);
             }
+
             foreach ($this->queryParameters as $parameter) {
                 $l = strlen($parameter);
                 if (($query[$i + $l] ?? '') === '=' && !substr_compare($query, $parameter, $i, $l)) {
-                    $query = substr_replace($query, 'REDACTED', $i + $l + 1, $d - $i - $l - 1);
+                    $sanitized .= substr($query, $offset, $i + $l + 1 - $offset);
+                    $sanitized .= 'REDACTED';
+                    $offset = $d;
+                    break;
                 }
             }
         }
 
-        if ($query === $url->getQuery()) {
+        if ($offset === 0) {
             return $url;
         }
 
-        return $url->withQuery($query);
+        $sanitized .= substr($query, $offset);
+
+        return $url->withQuery($sanitized);
     }
 }
