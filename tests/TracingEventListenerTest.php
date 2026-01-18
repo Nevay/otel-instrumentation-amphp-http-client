@@ -172,7 +172,7 @@ final class TracingEventListenerTest extends InterceptorTest {
 
         $this->givenEventListener($listener);
         $this->givenApplicationInterceptor(new ResolveBaseUri('http://example.com'));
-        $this->whenRequestIsExecuted(new Request('/foo/bar?test=1'));
+        @$this->whenRequestIsExecuted(new Request('/foo/bar?test=1'));
 
         $tracerProvider->shutdown();
         $spans = $exporter->collect();

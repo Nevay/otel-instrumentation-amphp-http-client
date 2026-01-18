@@ -2,35 +2,35 @@
 namespace Nevay\OTelInstrumentation\AmphpHttpClient;
 
 use Amp\Http\Client\HttpClientBuilder;
-use Nevay\OTelInstrumentation\Http;
 use OpenTelemetry\API\Configuration\ConfigProperties;
 use OpenTelemetry\API\Instrumentation\AutoInstrumentation\Context;
 use OpenTelemetry\API\Instrumentation\AutoInstrumentation\HookManagerInterface;
 use OpenTelemetry\API\Instrumentation\AutoInstrumentation\Instrumentation;
-use OpenTelemetry\API\Instrumentation\Configuration\General\HttpConfig;
+use OpenTelemetry\API\Instrumentation\Configuration\General\HttpConfig as GeneralHttpConfig;
+use OpenTelemetry\Contrib\Instrumentation\HttpConfig\HttpConfig as PhpHttpConfig;
 
 final class AmphpHttpClientInstrumentation implements Instrumentation {
 
     public function register(HookManagerInterface $hookManager, ConfigProperties $configuration, Context $context): void {
-        $config = $configuration->get(HttpConfig::class)?->config;
-        $httpConfig = $configuration->get(Http\HttpConfig::class) ?? new Http\HttpConfig();
+        $generalHttpConfig = $configuration->get(GeneralHttpConfig::class)?->config;
+        $phpHttpConfig = $configuration->get(PhpHttpConfig::class) ?? new PhpHttpConfig();
 
         $tracing = new TracingEventListener(
             tracerProvider: $context->tracerProvider,
             propagator: $context->propagator,
-            captureRequestHeaders: $config['client']['request_captured_headers'] ?? [],
-            captureResponseHeaders: $config['client']['response_captured_headers'] ?? [],
-            captureUrlScheme: $httpConfig->client->captureUrlScheme,
-            captureUserAgentOriginal: $httpConfig->client->captureUserAgentOriginal,
-            captureRequestBodySize: $httpConfig->client->captureRequestBodySize,
-            captureResponseBodySize: $httpConfig->client->captureResponseBodySize,
-            knownHttpMethods: $httpConfig->knownHttpMethods,
-            sanitizer: $httpConfig->sanitizer,
+            captureRequestHeaders: $generalHttpConfig['client']['request_captured_headers'] ?? [],
+            captureResponseHeaders: $generalHttpConfig['client']['response_captured_headers'] ?? [],
+            captureUrlScheme: $phpHttpConfig->client->captureUrlScheme,
+            captureUserAgentOriginal: $phpHttpConfig->client->captureUserAgentOriginal,
+            captureRequestBodySize: $phpHttpConfig->client->captureRequestBodySize,
+            captureResponseBodySize: $phpHttpConfig->client->captureResponseBodySize,
+            knownHttpMethods: $phpHttpConfig->knownHttpMethods,
+            sanitizer: $phpHttpConfig->sanitizer,
         );
         $metrics = new MetricsEventListener(
             meterProvider: $context->meterProvider,
-            captureUrlScheme: $httpConfig->client->captureUrlScheme,
-            knownHttpMethods: $httpConfig->knownHttpMethods,
+            captureUrlScheme: $phpHttpConfig->client->captureUrlScheme,
+            knownHttpMethods: $phpHttpConfig->knownHttpMethods,
         );
 
         $hookManager->hook(
