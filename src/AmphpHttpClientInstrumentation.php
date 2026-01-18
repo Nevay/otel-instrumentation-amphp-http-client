@@ -12,6 +12,11 @@ use OpenTelemetry\Contrib\Instrumentation\HttpConfig\HttpConfig as PhpHttpConfig
 final class AmphpHttpClientInstrumentation implements Instrumentation {
 
     public function register(HookManagerInterface $hookManager, ConfigProperties $configuration, Context $context): void {
+        $config = $configuration->get(AmphpHttpClientConfig::class) ?? new AmphpHttpClientConfig();
+        if (!$config->enabled) {
+            return;
+        }
+
         $generalHttpConfig = $configuration->get(GeneralHttpConfig::class)?->config;
         $phpHttpConfig = $configuration->get(PhpHttpConfig::class) ?? new PhpHttpConfig();
 

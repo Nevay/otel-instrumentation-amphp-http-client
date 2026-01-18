@@ -8,6 +8,26 @@ composer require tbachert/otel-instrumentation-amphp-http-client
 
 ## Usage
 
+### Automatic instrumentation
+
+This instrumentation is enabled by default.
+
+#### Disable via file-based configuration
+
+```yaml
+instrumentations/development:
+  php:
+    amphp_http_client: false
+```
+
+#### Disable via env-based configuration
+
+```shell
+OTEL_PHP_DISABLED_INSTRUMENTATIONS=amphp-http-client
+```
+
+### Manual instrumentation
+
 ```php
 use Amp\Http\Client\HttpClientBuilder;
 use Nevay\OTelInstrumentation\AmphpHttpClient\MetricsEventListener;
