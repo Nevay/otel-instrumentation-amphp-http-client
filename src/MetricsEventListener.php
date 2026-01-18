@@ -13,10 +13,18 @@ use Amp\Socket\UnixAddress;
 use Composer\InstalledVersions;
 use OpenTelemetry\API\Metrics\HistogramInterface;
 use OpenTelemetry\API\Metrics\MeterProviderInterface;
+use OpenTelemetry\API\Trace\SpanInterface;
+use OpenTelemetry\Context\Context;
 use Throwable;
 use function hrtime;
 use function in_array;
 
+/**
+ * Generates HTTP client request metrics.
+ *
+ * @see TracingEventListener
+ * @see https://opentelemetry.io/docs/specs/semconv/http/http-metrics/
+ */
 final class MetricsEventListener implements EventListener {
 
     private const START_OFFSET = '__otel.timing.start';
@@ -112,10 +120,11 @@ final class MetricsEventListener implements EventListener {
         $attributes = $this->requestAttributes($request);
         $attributes['error.type'] = $exception::class;
 
-        $this->requestDuration->record($duration, $attributes);
+        $context = $this->requestContext($request);
+        $this->requestDuration->record($duration, $attributes, $context);
 
         if ($request->hasHeader('content-length')) {
-            $this->requestBodySize->record(+$request->getHeader('content-length'), $attributes);
+            $this->requestBodySize->record(+$request->getHeader('content-length'), $attributes, $context);
         }
     }
 
@@ -157,7 +166,8 @@ final class MetricsEventListener implements EventListener {
             $attributes['network.peer.address'] = $remoteAddress->toString();
         }
 
-        $this->connectionDuration->record($connection->getConnectDuration(), $attributes);
+        $context = $this->requestContext($request);
+        $this->connectionDuration->record($connection->getConnectDuration(), $attributes, $context);
     }
 
     public function push(Request $request): void {
@@ -200,13 +210,14 @@ final class MetricsEventListener implements EventListener {
             $attributes['error.type'] = (string) $response->getStatus();
         }
 
-        $this->requestDuration->record($duration, $attributes);
+        $context = $this->requestContext($request);
+        $this->requestDuration->record($duration, $attributes, $context);
 
         if ($request->hasHeader('content-length')) {
-            $this->requestBodySize->record(+$request->getHeader('content-length'), $attributes);
+            $this->requestBodySize->record(+$request->getHeader('content-length'), $attributes, $context);
         }
         if ($response->hasHeader('content-length')) {
-            $this->responseBodySize->record(+$response->getHeader('content-length'), $attributes);
+            $this->responseBodySize->record(+$response->getHeader('content-length'), $attributes, $context);
         }
     }
 
@@ -220,5 +231,17 @@ final class MetricsEventListener implements EventListener {
 
     public function responseBodyEnd(Request $request, Stream $stream, Response $response): void {
         // no-op
+    }
+
+    private function requestContext(Request $request): Context {
+        $context = Context::getCurrent();
+        if (!$request->hasAttribute(SpanInterface::class)) {
+            return $context;
+        }
+
+        /** @var SpanInterface $span */
+        $span = $request->getAttribute(SpanInterface::class);
+
+        return $span->storeInContext($context);
     }
 }
