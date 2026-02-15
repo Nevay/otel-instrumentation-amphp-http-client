@@ -14,8 +14,7 @@ use Composer\InstalledVersions;
 use OpenTelemetry\API\Metrics\HistogramInterface;
 use OpenTelemetry\API\Metrics\MeterProviderInterface;
 use OpenTelemetry\API\Metrics\UpDownCounterInterface;
-use OpenTelemetry\API\Trace\SpanInterface;
-use OpenTelemetry\Context\Context;
+use OpenTelemetry\Context\ContextInterface;
 use OpenTelemetry\Contrib\Instrumentation\HttpConfig\HttpConfig;
 use Throwable;
 use function hrtime;
@@ -269,15 +268,11 @@ final class MetricsEventListener implements EventListener {
         // no-op
     }
 
-    private function requestContext(Request $request): Context {
-        $context = Context::getCurrent();
-        if (!$request->hasAttribute(SpanInterface::class)) {
-            return $context;
+    private function requestContext(Request $request): ContextInterface|false {
+        if (!$request->hasAttribute(ContextInterface::class)) {
+            return false;
         }
 
-        /** @var SpanInterface $span */
-        $span = $request->getAttribute(SpanInterface::class);
-
-        return $span->storeInContext($context);
+        return $request->getAttribute(ContextInterface::class);
     }
 }

@@ -36,13 +36,17 @@ final class AmphpHttpClientInstrumentation implements Instrumentation {
             meterProvider: $context->meterProvider,
             knownHttpMethods: $phpHttpConfig->knownHttpMethods,
         );
+        $logs = new LogsEventListener(
+            loggerProvider: $context->loggerProvider,
+        );
 
         $hookManager->hook(
             HttpClientBuilder::class,
             '__construct',
-            postHook: (static function(HttpClientBuilder $clientBuilder) use ($tracing, $metrics): void {
+            postHook: (static function(HttpClientBuilder $clientBuilder) use ($tracing, $metrics, $logs): void {
                 $clientBuilder->eventListeners[] = $tracing;
                 $clientBuilder->eventListeners[] = $metrics;
+                $clientBuilder->eventListeners[] = $logs;
             })->bindTo(null, HttpClientBuilder::class),
         );
     }

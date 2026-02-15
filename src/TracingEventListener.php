@@ -105,7 +105,6 @@ final class TracingEventListener implements EventListener {
         $span = $request->getAttribute(SpanInterface::class);
         assert($span instanceof SpanInterface);
 
-        $span->recordException($exception, ['exception.escaped' => true]);
         $span->setStatus(StatusCode::STATUS_ERROR, $exception->getMessage());
         $span->setAttribute('error.type', $exception::class);
         $span->end();
