@@ -1,0 +1,9 @@
+file_format: 1.0-rc.3
+
+instrumentation/development:
+  php:
+    amphp_http_client:
+      enabled: true
+      url_template_resolvers:
+        - request_attribute: { attribute: url.template }
+        - request_attribute: { attribute: League\Uri\UriTemplate }
