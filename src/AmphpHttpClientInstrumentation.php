@@ -34,7 +34,6 @@ final class AmphpHttpClientInstrumentation implements Instrumentation {
         );
         $metrics = new MetricsEventListener(
             meterProvider: $context->meterProvider,
-            captureUrlScheme: $phpHttpConfig->client->captureUrlScheme,
             knownHttpMethods: $phpHttpConfig->knownHttpMethods,
         );
 

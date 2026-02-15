@@ -13,8 +13,10 @@ use Amp\Socket\UnixAddress;
 use Composer\InstalledVersions;
 use OpenTelemetry\API\Metrics\HistogramInterface;
 use OpenTelemetry\API\Metrics\MeterProviderInterface;
+use OpenTelemetry\API\Metrics\UpDownCounterInterface;
 use OpenTelemetry\API\Trace\SpanInterface;
 use OpenTelemetry\Context\Context;
+use OpenTelemetry\Contrib\Instrumentation\HttpConfig\HttpConfig;
 use Throwable;
 use function hrtime;
 use function in_array;
@@ -33,43 +35,62 @@ final class MetricsEventListener implements EventListener {
     private readonly HistogramInterface $requestBodySize;
     private readonly HistogramInterface $responseBodySize;
     private readonly HistogramInterface $connectionDuration;
+    private readonly UpDownCounterInterface $activeRequests;
 
     /**
-     * @param bool $captureUrlScheme whether the `url.scheme` attribute should be captured
      * @param list<string> $knownHttpMethods case-sensitive list of known http methods
      */
     public function __construct(
         MeterProviderInterface $meterProvider,
-        private readonly bool $captureUrlScheme = false,
-        private readonly array $knownHttpMethods = ['CONNECT', 'DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT', 'TRACE'],
+        private readonly array $knownHttpMethods = HttpConfig::HTTP_METHODS,
     ) {
         $meter = $meterProvider->getMeter(
             'com.tobiasbachert.instrumentation.amphp-http-client',
             InstalledVersions::getPrettyVersion('tbachert/otel-instrumentation-amphp-http-client'),
-            'https://opentelemetry.io/schemas/1.33.0',
+            'https://opentelemetry.io/schemas/1.39.0',
         );
 
         $this->requestDuration = $meter->createHistogram(
             name: 'http.client.request.duration',
             unit: 's',
             description: 'Duration of HTTP client requests',
-            advisory: ['ExplicitBucketBoundaries' => [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]],
+            advisory: [
+                'Attributes' => ['http.request.method', 'server.address', 'server.port', 'error.type', 'http.response.status_code', 'network.protocol.name', 'network.protocol.version'],
+                'ExplicitBucketBoundaries' => [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10],
+            ],
         );
         $this->requestBodySize = $meter->createHistogram(
             name: 'http.client.request.body.size',
             unit: 'By',
             description: 'Size of HTTP client request bodies',
+            advisory: [
+                'Attributes' => ['http.request.method', 'server.address', 'server.port', 'error.type', 'http.response.status_code', 'network.protocol.name', 'url.template', 'network.protocol.version'],
+            ],
         );
         $this->responseBodySize = $meter->createHistogram(
             name: 'http.client.response.body.size',
             unit: 'By',
             description: 'Size of HTTP client response bodies',
+            advisory: [
+                'Attributes' => ['http.request.method', 'server.address', 'server.port', 'error.type', 'http.response.status_code', 'network.protocol.name', 'url.template', 'network.protocol.version'],
+            ],
         );
         $this->connectionDuration = $meter->createHistogram(
             name: 'http.client.connection.duration',
             unit: 's',
             description: 'The duration of the successfully established outbound HTTP connections',
-            advisory: ['ExplicitBucketBoundaries' => [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60, 120, 300]],
+            advisory: [
+                'Attributes' => ['server.address', 'server.port', 'network.peer.address', 'network.protocol.version'],
+                'ExplicitBucketBoundaries' => [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60, 120, 300],
+            ],
+        );
+        $this->activeRequests = $meter->createUpDownCounter(
+            name: 'http.client.active_requests',
+            unit: '{requests}',
+            description: 'Number of active HTTP requests',
+            advisory: [
+                'Attributes' => ['server.address', 'server.port', 'url.template', 'http.request.method'],
+            ],
         );
     }
 
@@ -87,11 +108,8 @@ final class MetricsEventListener implements EventListener {
                 'http' => 80,
                 default => null,
             },
+            'url.scheme' => $request->getUri()->getScheme(),
         ];
-
-        if ($this->captureUrlScheme) {
-            $attributes['url.scheme'] = $request->getUri()->getScheme();
-        }
 
         return $attributes;
     }
@@ -118,6 +136,8 @@ final class MetricsEventListener implements EventListener {
         }
 
         $attributes = $this->requestAttributes($request);
+        $this->activeRequests->add(-1, $attributes);
+
         $attributes['error.type'] = $exception::class;
 
         $context = $this->requestContext($request);
@@ -157,7 +177,18 @@ final class MetricsEventListener implements EventListener {
             return;
         }
 
-        $attributes = $this->requestAttributes($request);
+        $attributes = [
+            'server.address' => $request->getUri()->getHost(),
+            'server.port' => $request->getUri()->getPort() ?? match ($request->getUri()->getScheme()) {
+                'https' => 443,
+                'http' => 80,
+                default => null,
+            },
+            'network.peer.address' => null,
+            'network.protocol.version' => null,
+            'url.scheme' => $request->getUri()->getScheme(),
+        ];
+
         $remoteAddress = $connection->getRemoteAddress();
         if ($remoteAddress instanceof InternetAddress) {
             $attributes['network.peer.address'] = $remoteAddress->getAddress();
@@ -176,6 +207,9 @@ final class MetricsEventListener implements EventListener {
 
     public function requestHeaderStart(Request $request, Stream $stream): void {
         $request->setAttribute(self::START_OFFSET, hrtime(true));
+
+        $attributes = $this->requestAttributes($request);
+        $this->activeRequests->add(1, $attributes);
     }
 
     public function requestHeaderEnd(Request $request, Stream $stream): void {
@@ -204,6 +238,8 @@ final class MetricsEventListener implements EventListener {
         }
 
         $attributes = $this->requestAttributes($request);
+        $this->activeRequests->add(-1, $attributes);
+
         $attributes['http.response.status_code'] = $response->getStatus();
         $attributes['network.protocol.version'] = $response->getProtocolVersion();
         if ($response->getStatus() >= 400) {
