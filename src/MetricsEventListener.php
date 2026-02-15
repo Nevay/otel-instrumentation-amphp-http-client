@@ -11,6 +11,7 @@ use Amp\Http\Client\Response;
 use Amp\Socket\InternetAddress;
 use Amp\Socket\UnixAddress;
 use Composer\InstalledVersions;
+use Nevay\OTelInstrumentation\AmphpHttpClient\UrlTemplateResolver\CompositeUrlTemplateResolver;
 use OpenTelemetry\API\Metrics\HistogramInterface;
 use OpenTelemetry\API\Metrics\MeterProviderInterface;
 use OpenTelemetry\API\Metrics\UpDownCounterInterface;
@@ -42,6 +43,7 @@ final class MetricsEventListener implements EventListener {
     public function __construct(
         MeterProviderInterface $meterProvider,
         private readonly array $knownHttpMethods = HttpConfig::HTTP_METHODS,
+        private readonly UrlTemplateResolver $urlTemplateResolver = new CompositeUrlTemplateResolver(),
     ) {
         $meter = $meterProvider->getMeter(
             'com.tobiasbachert.instrumentation.amphp-http-client',
@@ -108,6 +110,7 @@ final class MetricsEventListener implements EventListener {
                 default => null,
             },
             'url.scheme' => $request->getUri()->getScheme(),
+            'url.template' => $this->urlTemplateResolver->resolveUrlTemplate($request),
         ];
 
         return $attributes;

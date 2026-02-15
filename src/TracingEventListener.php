@@ -14,6 +14,7 @@ use Amp\Socket\UnixAddress;
 use Composer\InstalledVersions;
 use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\HttpMessagePropagationSetter;
 use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\RequestSharedState;
+use Nevay\OTelInstrumentation\AmphpHttpClient\UrlTemplateResolver\CompositeUrlTemplateResolver;
 use OpenTelemetry\API\Trace\SpanInterface;
 use OpenTelemetry\API\Trace\SpanKind;
 use OpenTelemetry\API\Trace\StatusCode;
@@ -75,6 +76,7 @@ final class TracingEventListener implements EventListener {
         private readonly bool $captureResponseBodySize = false,
         private readonly array $knownHttpMethods = HttpConfig::HTTP_METHODS,
         private readonly UriSanitizer $sanitizer = new DefaultSanitizer(),
+        private readonly UrlTemplateResolver $urlTemplateResolver = new CompositeUrlTemplateResolver(),
     ) {
         $this->tracer = $tracerProvider->getTracer(
             'com.tobiasbachert.instrumentation.amphp-http-client',
@@ -148,8 +150,14 @@ final class TracingEventListener implements EventListener {
             $method = null;
         }
 
+        $spanName = $method ?? 'HTTP';
+        if (($urlTemplate = $this->urlTemplateResolver->resolveUrlTemplate($request)) !== null) {
+            $spanName .= ' ';
+            $spanName .= $urlTemplate;
+        }
+
         $spanBuilder = $this->tracer
-            ->spanBuilder($method ?? 'HTTP')
+            ->spanBuilder($spanName)
             ->setSpanKind(SpanKind::KIND_CLIENT)
             ->setAttribute('http.request.method', $method ?? '_OTHER')
             ->setAttribute('server.address', $request->getUri()->getHost())
@@ -159,6 +167,7 @@ final class TracingEventListener implements EventListener {
                 default => null,
             })
             ->setAttribute('url.full', $this->sanitizer->sanitize($request->getUri())->__toString())
+            ->setAttribute('url.template', $urlTemplate)
         ;
 
         $sharedState = $request->getAttribute(RequestSharedState::class);

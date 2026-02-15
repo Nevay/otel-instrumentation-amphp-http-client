@@ -17,6 +17,7 @@ use Amp\Http\Server\SocketHttpServer;
 use Amp\Socket\InternetAddress;
 use Amp\Socket\ResourceServerSocketFactory;
 use Amp\Socket\StaticSocketConnector;
+use Nevay\OTelInstrumentation\AmphpHttpClient\UrlTemplateResolver\RequestAttributeResolver;
 use Nevay\OTelSDK\Trace\IdGenerator;
 use Nevay\OTelSDK\Trace\SpanExporter\InMemorySpanExporter;
 use Nevay\OTelSDK\Trace\SpanProcessor\BatchSpanProcessor;
@@ -66,6 +67,29 @@ final class TracingEventListenerTest extends InterceptorTest {
 
         $this->assertTrue($this->getRequest()->hasAttribute(SpanInterface::class));
         $this->assertTrue($this->getRequest()->hasAttribute(ContextInterface::class));
+    }
+
+    public function testSpanNameWithUrlTemplate(): void {
+        $tracerProvider = (new TracerProviderBuilder())
+            ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
+            ->build();
+
+        $listener = new TracingEventListener($tracerProvider, new NoopTextMapPropagator(), urlTemplateResolver: new RequestAttributeResolver('url.template'));
+
+        $this->givenEventListener($listener);
+
+        $request = new Request('http://example.com/foo/bar?test=1');
+        $request->setAttribute('url.template', '/bar');
+        $this->whenRequestIsExecuted($request);
+
+        $tracerProvider->shutdown();
+        $spans = $exporter->collect();
+        $this->assertCount(1, $spans);
+
+        $span = $spans[0];
+
+        $this->assertSame('GET /bar', $span->getName());
+        $this->assertSame('/bar', $span->getAttributes()->get('url.template'));
     }
 
     public function testSpanAttributes(): void {

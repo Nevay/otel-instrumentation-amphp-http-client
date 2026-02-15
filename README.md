@@ -30,12 +30,14 @@ OTEL_PHP_DISABLED_INSTRUMENTATIONS=amphp-http-client
 
 ```php
 use Amp\Http\Client\HttpClientBuilder;
+use Nevay\OTelInstrumentation\AmphpHttpClient\LogsEventListener;
 use Nevay\OTelInstrumentation\AmphpHttpClient\MetricsEventListener;
 use Nevay\OTelInstrumentation\AmphpHttpClient\TracingEventListener;
 
 $httpClient = (new HttpClientBuilder)
     ->listen(new TracingEventListener($tracerProvider, $propagator))
     ->listen(new MetricsEventListener($meterProvider))
+    ->listen(new LogsEventListener($loggerProvider))
     ->build();
 
 $response = $httpClient->request(...);

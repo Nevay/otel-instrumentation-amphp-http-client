@@ -31,10 +31,12 @@ final class AmphpHttpClientInstrumentation implements Instrumentation {
             captureResponseBodySize: $phpHttpConfig->client->captureResponseBodySize,
             knownHttpMethods: $phpHttpConfig->knownHttpMethods,
             sanitizer: $phpHttpConfig->sanitizer,
+            urlTemplateResolver: $config->urlTemplateResolver,
         );
         $metrics = new MetricsEventListener(
             meterProvider: $context->meterProvider,
             knownHttpMethods: $phpHttpConfig->knownHttpMethods,
+            urlTemplateResolver: $config->urlTemplateResolver,
         );
         $logs = new LogsEventListener(
             loggerProvider: $context->loggerProvider,
