@@ -1,5 +1,5 @@
 <?php declare(strict_types=1);
-namespace Nevay\OTelInstrumentation\AmphpHttpClient;
+namespace Nevay\OTelInstrumentation\AmphpHttpClient\EventListener;
 
 use Amp\Http\Client\ApplicationInterceptor;
 use Amp\Http\Client\Connection\Connection;
@@ -8,52 +8,33 @@ use Amp\Http\Client\EventListener;
 use Amp\Http\Client\NetworkInterceptor;
 use Amp\Http\Client\Request;
 use Amp\Http\Client\Response;
-use Composer\InstalledVersions;
-use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\RequestSharedState;
-use OpenTelemetry\API\Logs\LoggerInterface;
-use OpenTelemetry\API\Logs\LoggerProviderInterface;
-use OpenTelemetry\API\Trace\SpanInterface;
+use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\HttpMessagePropagationSetter;
 use OpenTelemetry\Context\ContextInterface;
+use OpenTelemetry\Context\Propagation\PropagationSetterInterface;
+use OpenTelemetry\Context\Propagation\TextMapPropagatorInterface;
 use Throwable;
 
 /**
- * Generates HTTP client request logs.
+ * Propagates HTTP client spans to requests.
  *
- * @see https://opentelemetry.io/docs/specs/semconv/http/
+ * @see https://opentelemetry.io/docs/specs/semconv/http/http-spans/
  */
-final class LogsEventListener implements EventListener {
+final class RequestPropagator implements EventListener {
 
-    private readonly LoggerInterface $logger;
+    private readonly TextMapPropagatorInterface $propagator;
+    private readonly PropagationSetterInterface $propagationSetter;
 
-    public function __construct(
-        LoggerProviderInterface $loggerProvider,
-    ) {
-        $this->logger = $loggerProvider->getLogger(
-            'com.tobiasbachert.instrumentation.amphp-http-client',
-            InstalledVersions::getPrettyVersion('tbachert/otel-instrumentation-amphp-http-client'),
-            'https://opentelemetry.io/schemas/1.39.0',
-        );
+    public function __construct(TextMapPropagatorInterface $propagator) {
+        $this->propagator = $propagator;
+        $this->propagationSetter = new HttpMessagePropagationSetter();
     }
 
     public function requestStart(Request $request): void {
-        if (!$request->hasAttribute(RequestSharedState::class)) {
-            $request->setAttribute(RequestSharedState::class, new RequestSharedState());
-        }
-
-        if ($request->hasAttribute(SpanInterface::class)) {
-            $request->removeAttribute(SpanInterface::class);
-        }
+        // no-op
     }
 
     public function requestFailed(Request $request, Throwable $exception): void {
-        $context = self::requestContext($request);
-
-        $this->logger
-            ->logRecordBuilder()
-            ->setEventName('http.client.request.error')
-            ->setException($exception)
-            ->setContext($context)
-            ->emit();
+        // no-op
     }
 
     public function requestEnd(Request $request, Response $response): void {
@@ -89,7 +70,12 @@ final class LogsEventListener implements EventListener {
     }
 
     public function requestHeaderStart(Request $request, Stream $stream): void {
-        // no-op
+        $context = self::requestContext($request) ?: null;
+
+        foreach ($this->propagator->fields() as $field) {
+            $request->removeHeader($field);
+        }
+        $this->propagator->inject($request, $this->propagationSetter, $context);
     }
 
     public function requestHeaderEnd(Request $request, Stream $stream): void {

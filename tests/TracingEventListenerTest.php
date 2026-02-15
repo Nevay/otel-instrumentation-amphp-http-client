@@ -17,6 +17,8 @@ use Amp\Http\Server\SocketHttpServer;
 use Amp\Socket\InternetAddress;
 use Amp\Socket\ResourceServerSocketFactory;
 use Amp\Socket\StaticSocketConnector;
+use Nevay\OTelInstrumentation\AmphpHttpClient\EventListener\RequestPropagator;
+use Nevay\OTelInstrumentation\AmphpHttpClient\EventListener\Tracing;
 use Nevay\OTelInstrumentation\AmphpHttpClient\UrlTemplateResolver\RequestAttributeResolver;
 use Nevay\OTelSDK\Trace\IdGenerator;
 use Nevay\OTelSDK\Trace\SpanExporter\InMemorySpanExporter;
@@ -26,7 +28,6 @@ use OpenTelemetry\API\Trace\NoopTracerProvider;
 use OpenTelemetry\API\Trace\Propagation\TraceContextPropagator;
 use OpenTelemetry\API\Trace\SpanInterface;
 use OpenTelemetry\Context\ContextInterface;
-use OpenTelemetry\Context\Propagation\NoopTextMapPropagator;
 use Psr\Log\NullLogger;
 use function Amp\Socket\socketConnector;
 use function hex2bin;
@@ -50,9 +51,9 @@ final class TracingEventListenerTest extends InterceptorTest {
                 }
             })
             ->build();
-        $listener = new TracingEventListener($tracerProvider, new TraceContextPropagator());
 
-        $this->givenEventListener($listener);
+        $this->givenEventListener(new Tracing($tracerProvider));
+        $this->givenEventListener(new RequestPropagator(new TraceContextPropagator()));
         $this->whenRequestIsExecuted();
         $this->thenRequestHasHeader('traceparent', '00-ac0a7f8c2faac49775a616b7c0cc21d8-43b34e9afb52a2db-01');
 
@@ -60,7 +61,7 @@ final class TracingEventListenerTest extends InterceptorTest {
     }
 
     public function testSetsRequestAttributesSpanAndContext(): void {
-        $listener = new TracingEventListener(new NoopTracerProvider(), new NoopTextMapPropagator());
+        $listener = new Tracing(new NoopTracerProvider());
 
         $this->givenEventListener($listener);
         $this->whenRequestIsExecuted();
@@ -74,7 +75,7 @@ final class TracingEventListenerTest extends InterceptorTest {
             ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
             ->build();
 
-        $listener = new TracingEventListener($tracerProvider, new NoopTextMapPropagator(), urlTemplateResolver: new RequestAttributeResolver('url.template'));
+        $listener = new Tracing($tracerProvider, urlTemplateResolver: new RequestAttributeResolver('url.template'));
 
         $this->givenEventListener($listener);
 
@@ -97,7 +98,7 @@ final class TracingEventListenerTest extends InterceptorTest {
             ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
             ->build();
 
-        $listener = new TracingEventListener($tracerProvider, new NoopTextMapPropagator());
+        $listener = new Tracing($tracerProvider);
 
         $this->givenEventListener($listener);
         $this->whenRequestIsExecuted(new Request('http://example.com/foo/bar?test=1'));
@@ -119,7 +120,7 @@ final class TracingEventListenerTest extends InterceptorTest {
         $tracerProvider = (new TracerProviderBuilder())
             ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
             ->build();
-        $listener = new TracingEventListener($tracerProvider, new NoopTextMapPropagator(), captureRequestHeaders: ['Content-Length']);
+        $listener = new Tracing($tracerProvider, captureRequestHeaders: ['Content-Length']);
 
         $this->givenEventListener($listener);
         $this->whenRequestIsExecuted(new Request('http://example.com', 'POST', BufferedContent::fromString('test')));
@@ -135,7 +136,7 @@ final class TracingEventListenerTest extends InterceptorTest {
         $tracerProvider = (new TracerProviderBuilder())
             ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
             ->build();
-        $listener = new TracingEventListener($tracerProvider, new NoopTextMapPropagator());
+        $listener = new Tracing($tracerProvider);
 
         $this->givenEventListener($listener);
         $this->whenRequestIsExecuted(new Request('http://example.com/foo/bar?test=1', 'CUSTOM'));
@@ -155,7 +156,7 @@ final class TracingEventListenerTest extends InterceptorTest {
         $tracerProvider = (new TracerProviderBuilder())
             ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
             ->build();
-        $listener = new TracingEventListener($tracerProvider, new NoopTextMapPropagator());
+        $listener = new Tracing($tracerProvider);
 
         (fn() => $this->builder = $this->builder->allowDeprecatedUriUserInfo())->bindTo($this, InterceptorTest::class)();
         $this->givenEventListener($listener);
@@ -174,7 +175,7 @@ final class TracingEventListenerTest extends InterceptorTest {
         $tracerProvider = (new TracerProviderBuilder())
             ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
             ->build();
-        $listener = new TracingEventListener($tracerProvider, new NoopTextMapPropagator());
+        $listener = new Tracing($tracerProvider);
 
         $this->givenEventListener($listener);
         $this->whenRequestIsExecuted(new Request('http://www.example.com/path?color=blue&sig=somesignature'));
@@ -192,7 +193,7 @@ final class TracingEventListenerTest extends InterceptorTest {
         $tracerProvider = (new TracerProviderBuilder())
             ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
             ->build();
-        $listener = new TracingEventListener($tracerProvider, new NoopTextMapPropagator());
+        $listener = new Tracing($tracerProvider);
 
         $this->givenEventListener($listener);
         $this->givenApplicationInterceptor(new ResolveBaseUri('http://example.com'));
@@ -222,7 +223,7 @@ final class TracingEventListenerTest extends InterceptorTest {
         $tracerProvider = (new TracerProviderBuilder())
             ->addSpanProcessor(new BatchSpanProcessor($exporter = new InMemorySpanExporter()))
             ->build();
-        $listener = new TracingEventListener($tracerProvider, new NoopTextMapPropagator());
+        $listener = new Tracing($tracerProvider);
 
         $client = (new HttpClientBuilder())
             ->usingPool(new UnlimitedConnectionPool(new DefaultConnectionFactory(new StaticSocketConnector($server->getServers()[0]->getAddress()->toString(), socketConnector()))))

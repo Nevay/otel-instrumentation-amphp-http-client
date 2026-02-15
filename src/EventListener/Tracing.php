@@ -1,5 +1,5 @@
 <?php declare(strict_types=1);
-namespace Nevay\OTelInstrumentation\AmphpHttpClient;
+namespace Nevay\OTelInstrumentation\AmphpHttpClient\EventListener;
 
 use Amp\Http\Client\ApplicationInterceptor;
 use Amp\Http\Client\Connection\Connection;
@@ -12,8 +12,8 @@ use Amp\Socket\InternetAddress;
 use Amp\Socket\SocketAddressType;
 use Amp\Socket\UnixAddress;
 use Composer\InstalledVersions;
-use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\HttpMessagePropagationSetter;
 use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\RequestSharedState;
+use Nevay\OTelInstrumentation\AmphpHttpClient\UrlTemplateResolver;
 use Nevay\OTelInstrumentation\AmphpHttpClient\UrlTemplateResolver\CompositeUrlTemplateResolver;
 use OpenTelemetry\API\Trace\SpanInterface;
 use OpenTelemetry\API\Trace\SpanKind;
@@ -22,7 +22,6 @@ use OpenTelemetry\API\Trace\TracerInterface;
 use OpenTelemetry\API\Trace\TracerProviderInterface;
 use OpenTelemetry\Context\Context;
 use OpenTelemetry\Context\ContextInterface;
-use OpenTelemetry\Context\Propagation\TextMapPropagatorInterface;
 use OpenTelemetry\Contrib\Instrumentation\HttpConfig\HttpConfig;
 use OpenTelemetry\Contrib\Instrumentation\HttpConfig\UriSanitizer;
 use OpenTelemetry\Contrib\Instrumentation\HttpConfig\UriSanitizer\DefaultSanitizer;
@@ -48,7 +47,7 @@ use function strtolower;
  *
  * @see https://opentelemetry.io/docs/specs/semconv/http/http-spans/
  */
-final class TracingEventListener implements EventListener {
+final class Tracing implements EventListener {
 
     private readonly TracerInterface $tracer;
     private readonly array $captureRequestHeaders;
@@ -66,7 +65,6 @@ final class TracingEventListener implements EventListener {
      */
     public function __construct(
         TracerProviderInterface $tracerProvider,
-        private readonly TextMapPropagatorInterface $propagator,
         array $captureRequestHeaders = [],
         array $captureResponseHeaders = [],
         private readonly bool $captureUrlScheme = false,
@@ -213,10 +211,6 @@ final class TracingEventListener implements EventListener {
 
         $span = $spanBuilder->startSpan();
         $context = $span->storeInContext(Context::getCurrent());
-        foreach ($this->propagator->fields() as $field) {
-            $request->removeHeader($field);
-        }
-        $this->propagator->inject($request, new HttpMessagePropagationSetter(), $context);
 
         $request->setAttribute(SpanInterface::class, $span);
         $request->setAttribute(ContextInterface::class, $context);

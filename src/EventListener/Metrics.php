@@ -1,5 +1,5 @@
 <?php declare(strict_types=1);
-namespace Nevay\OTelInstrumentation\AmphpHttpClient;
+namespace Nevay\OTelInstrumentation\AmphpHttpClient\EventListener;
 
 use Amp\Http\Client\ApplicationInterceptor;
 use Amp\Http\Client\Connection\Connection;
@@ -11,6 +11,7 @@ use Amp\Http\Client\Response;
 use Amp\Socket\InternetAddress;
 use Amp\Socket\UnixAddress;
 use Composer\InstalledVersions;
+use Nevay\OTelInstrumentation\AmphpHttpClient\UrlTemplateResolver;
 use Nevay\OTelInstrumentation\AmphpHttpClient\UrlTemplateResolver\CompositeUrlTemplateResolver;
 use OpenTelemetry\API\Metrics\HistogramInterface;
 use OpenTelemetry\API\Metrics\MeterProviderInterface;
@@ -24,10 +25,10 @@ use function in_array;
 /**
  * Generates HTTP client request metrics.
  *
- * @see TracingEventListener
+ * @see Tracing
  * @see https://opentelemetry.io/docs/specs/semconv/http/http-metrics/
  */
-final class MetricsEventListener implements EventListener {
+final class Metrics implements EventListener {
 
     private const START_OFFSET = '__otel.timing.start';
 
