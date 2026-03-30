@@ -49,7 +49,7 @@ final class Metrics implements EventListener {
         $meter = $meterProvider->getMeter(
             'com.tobiasbachert.instrumentation.amphp-http-client',
             InstalledVersions::getPrettyVersion('tbachert/otel-instrumentation-amphp-http-client'),
-            'https://opentelemetry.io/schemas/1.39.0',
+            'https://opentelemetry.io/schemas/1.40.0',
         );
 
         $this->requestDuration = $meter->createHistogram(

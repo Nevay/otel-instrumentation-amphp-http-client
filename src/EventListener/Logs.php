@@ -12,6 +12,7 @@ use Composer\InstalledVersions;
 use Nevay\OTelInstrumentation\AmphpHttpClient\Internal\RequestSharedState;
 use OpenTelemetry\API\Logs\LoggerInterface;
 use OpenTelemetry\API\Logs\LoggerProviderInterface;
+use OpenTelemetry\API\Logs\Severity;
 use OpenTelemetry\API\Trace\SpanInterface;
 use OpenTelemetry\Context\ContextInterface;
 use Throwable;
@@ -31,7 +32,7 @@ final class Logs implements EventListener {
         $this->logger = $loggerProvider->getLogger(
             'com.tobiasbachert.instrumentation.amphp-http-client',
             InstalledVersions::getPrettyVersion('tbachert/otel-instrumentation-amphp-http-client'),
-            'https://opentelemetry.io/schemas/1.39.0',
+            'https://opentelemetry.io/schemas/1.40.0',
         );
     }
 
@@ -50,7 +51,8 @@ final class Logs implements EventListener {
 
         $this->logger
             ->logRecordBuilder()
-            ->setEventName('http.client.request.error')
+            ->setEventName('http.client.request.exception')
+            ->setSeverityNumber(Severity::WARN)
             ->setException($exception)
             ->setContext($context)
             ->emit();
