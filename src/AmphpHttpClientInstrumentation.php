@@ -34,13 +34,13 @@ final class AmphpHttpClientInstrumentation implements Instrumentation {
                 captureUserAgentOriginal: $phpHttpConfig->client->captureUserAgentOriginal,
                 captureRequestBodySize: $phpHttpConfig->client->captureRequestBodySize,
                 captureResponseBodySize: $phpHttpConfig->client->captureResponseBodySize,
-                knownHttpMethods: $phpHttpConfig->knownHttpMethods,
+                knownHttpMethods: $generalHttpConfig['client']['known_methods'] ?? $phpHttpConfig->knownHttpMethods,
                 sanitizer: $phpHttpConfig->sanitizer,
                 urlTemplateResolver: $config->urlTemplateResolver,
             ),
             new Metrics(
                 meterProvider: $context->meterProvider,
-                knownHttpMethods: $phpHttpConfig->knownHttpMethods,
+                knownHttpMethods: $generalHttpConfig['client']['known_methods'] ?? $phpHttpConfig->knownHttpMethods,
                 urlTemplateResolver: $config->urlTemplateResolver,
             ),
             new Logs(
