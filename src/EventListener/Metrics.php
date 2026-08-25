@@ -88,7 +88,7 @@ final class Metrics implements EventListener {
         );
         $this->activeRequests = $meter->createUpDownCounter(
             name: 'http.client.active_requests',
-            unit: '{requests}',
+            unit: '{request}',
             description: 'Number of active HTTP requests',
             advisory: [
                 'Attributes' => ['server.address', 'server.port', 'url.template', 'http.request.method'],
